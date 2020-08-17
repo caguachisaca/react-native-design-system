@@ -11,13 +11,16 @@ class Deck extends Component {
         this.state = {
             data: props.data,
             animation: new Animated.ValueXY(),
+            animation2: new Animated.ValueXY(),
             next: new Animated.Value(0.9),
+            third: new Animated.Value(0.9),
             endOfCards: false,
             loading: props.loadInitialData ? true : false,
         };
         this.SWIPE_THRESHOLD = 0.25 * (props.vertical ? height : width);
         this.page = 0;
         this.createPanResponder();
+        this.createPanResponder2();
         this.checkMoreCards();
     }
 
@@ -62,6 +65,47 @@ class Deck extends Component {
         });
     }
 
+    createPanResponder2 = () => {
+        const { vertical } = this.props;
+        this._panResponder2 = PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderMove: (event, gesture) => {
+                vertical ? this.state.animation2.setValue({ x: 0, y: gesture.dy }) : this.state.animation2.setValue({ x: gesture.dx, y: gesture.dy });
+            },
+            onPanResponderRelease: (e, { dx, dy, vx, vy }) => {
+                let velocity;
+                const vxy = vertical ? vy : vx;
+                const minClamp = vertical ? 6 : 4;
+                const maxClamp = vertical ? 7 : 5;
+                if (vxy >= 0) {
+                    velocity = clamp(vxy, minClamp, maxClamp);
+                } else if (vxy < 0) {
+                    velocity = clamp(Math.abs(vxy), minClamp, maxClamp) * -1;
+                }
+
+                if (Math.abs(vertical ? dy : dx) > this.SWIPE_THRESHOLD) {
+                    Animated.decay(this.state.animation2, {
+                        velocity: { x: vertical ? vx : velocity, y: vertical ? velocity : vy },
+                        deceleration: 0.99,
+                        useNativeDriver: true,
+                    }).start(this.transitionNext);
+                    if (velocity > 0) {
+                        this.handlePositiveDecay();
+                    } else {
+                        this.handleNegativeDecay();
+                    }
+                } else {
+                    Animated.spring(this.state.animation2, {
+                        toValue: { x: 0, y: 0 },
+                        friction: 4,
+                        useNativeDriver: true,
+                    }).start();
+                }
+            },
+        });
+    }
+
     handleNegativeDecay = () => {
         this.props.onNegativeSwipe && this.props.onNegativeSwipe();
     }
@@ -83,8 +127,15 @@ class Deck extends Component {
                     };
                 },
                 () => {
+                    Animated.spring(this.state.third, {
+                        toValue: 1,
+                        friction: 4,
+                        useNativeDriver: true,
+                    });
                     this.state.next.setValue(0.9);
+                    this.state.third.setValue(0.9);
                     this.state.animation.setValue({ x: 0, y: 0 });
+                    this.state.animation2.setValue({ x: 0, y: 0 });
                     this.checkMoreCards();
                 },
             );
@@ -110,7 +161,7 @@ class Deck extends Component {
     getCardStyles = (index, items) => {
         const isLastItem = index === items.length - 1;
         const isSecondToLast = index === items.length - 2;
-        const { animation, next } = this.state;
+        const { animation, next, animation2 } = this.state;
         const { vertical, fade } = this.props;
 
         const rotate = vertical
@@ -133,6 +184,26 @@ class Deck extends Component {
                 })
             : 1;
 
+        const rotate2 = vertical
+            ? '0deg'
+            : animation2.x.interpolate({
+                inputRange: [-200, 0, 200],
+                outputRange: ['-30deg', '0deg', '30deg'],
+                extrapolate: 'clamp',
+            });
+
+        const opacity2 = fade
+            ? vertical
+                ? animation2.y.interpolate({
+                    inputRange: [-200, 0, 200],
+                    outputRange: [0.5, 1, 0.5],
+                })
+                : animation2.x.interpolate({
+                    inputRange: [-200, 0, 200],
+                    outputRange: [0.5, 1, 0.5],
+                })
+            : 1;
+
         const animatedCardStyles = {
             transform: [{ rotate }, ...animation.getTranslateTransform()],
             opacity,
@@ -140,10 +211,12 @@ class Deck extends Component {
 
         const cardStyle = isLastItem ? animatedCardStyles : undefined;
         const nextStyle = isSecondToLast
-            ? { transform: [{ scale: next }], borderRadius: 5 }
+            ? { transform: [{ rotate: rotate2 }, { scale: next }, ...animation2.getTranslateTransform()], borderRadius: 5 }
             : undefined;
-
-        return StyleSheet.flatten([styles.card, cardStyle, nextStyle, this.props.style]);
+        const thirdCard = !isLastItem && !isSecondToLast
+            ? { transform: [{ scale: this.state.third}]}
+            : undefined;
+        return StyleSheet.flatten([styles.card, cardStyle, nextStyle, this.props.style, thirdCard]);
     }
 
     renderLoadingScreen() {
@@ -160,11 +233,11 @@ class Deck extends Component {
                     : endOfCards
                         ? <Text>No more cards</Text>
                         : data
-                            .slice(0, 2)
+                            .slice(0, 4)
                             .reverse()
                             .map((item, index, items) => {
                                 const isLastItem = index === items.length - 1;
-                                const panHandlers = isLastItem ? { ...this._panResponder.panHandlers } : {};
+                                const panHandlers = isLastItem ? { ...this._panResponder.panHandlers } : { ...this._panResponder2.panHandlers};
                                 return (
                                     <Animated.View
                                         {...panHandlers}
