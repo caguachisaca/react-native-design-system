@@ -19,12 +19,12 @@ class Deck extends Component {
         };
         this.SWIPE_THRESHOLD = 0.25 * (props.vertical ? height : width);
         this.page = 0;
-        this.createPanResponder();
-        this.createPanResponder2();
+        this.createFirstPanResponder();
+        this.createSecondPanResponder();
         this.checkMoreCards();
     }
 
-    createPanResponder = () => {
+    createFirstPanResponder = () => {
         const { vertical } = this.props;
         this._panResponder = PanResponder.create({
             onStartShouldSetPanResponder: () => true,
@@ -65,7 +65,7 @@ class Deck extends Component {
         });
     }
 
-    createPanResponder2 = () => {
+    createSecondPanResponder = () => {
         const { vertical } = this.props;
         this._panResponder2 = PanResponder.create({
             onStartShouldSetPanResponder: () => true,
