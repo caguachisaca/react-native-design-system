@@ -13,6 +13,7 @@ class Deck extends Component {
             swiped: [],
             animation: new Animated.ValueXY(),
             next: new Animated.Value(0.9),
+            swing: new Animated.ValueXY({ x: 0, y: height }),
             endOfCards: false,
             loading: props.loadInitialData ? true : false,
         };
@@ -32,7 +33,11 @@ class Deck extends Component {
             onStartShouldSetPanResponder: () => true,
             onMoveShouldSetPanResponder: () => true,
             onPanResponderMove: (event, gesture) => {
-                vertical ? this.state.animation.setValue({ x: 0, y: gesture.dy }) : this.state.animation.setValue({ x: gesture.dx, y: gesture.dy });
+                if (gesture.dy > 0){
+                    this.state.swing.setValue({ x: 0, y: gesture.dy - height });
+                } else {
+                    vertical ? this.state.animation.setValue({ x: 0, y: gesture.dy }) : this.state.animation.setValue({ x: gesture.dx, y: gesture.dy });
+                }
             },
             onPanResponderRelease: (e, { dx, dy, vx, vy }) => {
                 let velocity;
@@ -44,6 +49,38 @@ class Deck extends Component {
                 } else if (vxy < 0) {
                     velocity = clamp(Math.abs(vxy), minClamp, maxClamp) * -1;
                 }
+
+                if (vxy > 0){
+                    if (Math.abs(vertical ? dy : dx) > this.SWIPE_THRESHOLD) {
+                        Animated.decay(this.state.swing, {
+                            velocity: { x: 0, y: velocity },
+                            deceleration: 0.99,
+                            useNativeDriver: true,
+                        }).start(() => {
+                            this.setState(
+                                (state) => {
+                                    const { data, swiped } = state;
+                                    data.unshift(swiped.shift());
+                                    return { swiped, data };
+                                },
+                                () => {
+                                    this.state.swing.setValue({ x: 0, y: height });
+                                },
+                            );
+                        });
+                        // if (velocity > 0) {
+                        //     this.handlePositiveDecay();
+                        // } else {
+                        //     this.handleNegativeDecay();
+                        // }
+                    } else {
+                        Animated.spring(this.state.swing, {
+                            toValue: { x: 0, y: 0 },
+                            friction: 4,
+                            useNativeDriver: true,
+                        }).start();
+                    }
+                } else {
 
                 if (Math.abs(vertical ? dy : dx) > this.SWIPE_THRESHOLD) {
                     Animated.parallel([
@@ -70,6 +107,8 @@ class Deck extends Component {
                         useNativeDriver: true,
                     }).start();
                 }
+
+            }
             },
         });
     }
@@ -86,7 +125,7 @@ class Deck extends Component {
         this.setState(
             (state) => {
                 const { data, swiped } = state;
-                swiped.push(data.shift());
+                swiped.unshift(data.shift());
                 return { swiped, data };
             },
             () => {
@@ -156,8 +195,51 @@ class Deck extends Component {
         return this.props.loadingScreen || <FullScreenLoader loading />;
     }
 
+    renderCards(){
+        const { data, swiped, swing } = this.state;
+        return (
+            <>
+                {
+                    swiped.slice(0, 2).reverse()
+                        .map((item, index, items) => {
+                            const isLastItem = index === items.length - 1;
+                            const animationStyles = isLastItem ?  {
+                                transform: [...swing.getTranslateTransform()],
+                                elevation: 3,
+                            } : {
+                                transform: [{ translateY: -height }],
+                                elevation: 3,
+                            };
+                            return (
+                                <Animated.View
+                                    style={[styles.card, animationStyles ]}
+                                    key={this.props.keyExtractor(item)}>
+                                    {this.props.renderItem(item, true)}
+                                </Animated.View>
+                            );
+                        })
+                }
+                {data
+                    .slice(0, 2)
+                    .reverse()
+                    .map((item, index, items) => {
+                        const isLastItem = index === items.length - 1;
+                        const panHandlers = isLastItem ? { ...this._panResponder.panHandlers } : {};
+                        return (
+                            <Animated.View
+                                {...panHandlers}
+                                style={this.getCardStyles(index, items)}
+                                key={this.props.keyExtractor(item)}>
+                                {this.props.renderItem(item)}
+                            </Animated.View>
+                        );
+                    })}
+            </>
+        );
+    }
+
     render() {
-        const { data, endOfCards, loading } = this.state;
+        const { endOfCards, loading } = this.state;
 
         return (
             <View style={styles.container}>
@@ -165,21 +247,7 @@ class Deck extends Component {
                     ? this.renderLoadingScreen()
                     : endOfCards
                         ? <Text>No more cards</Text>
-                        : data
-                            .slice(0, 2)
-                            .reverse()
-                            .map((item, index, items) => {
-                                const isLastItem = index === items.length - 1;
-                                const panHandlers = isLastItem ? { ...this._panResponder.panHandlers } : {};
-                                return (
-                                    <Animated.View
-                                        {...panHandlers}
-                                        style={this.getCardStyles(index, items)}
-                                        key={this.props.keyExtractor(item)}>
-                                        {this.props.renderItem(item)}
-                                    </Animated.View>
-                                );
-                            })}
+                        : this.renderCards()}
             </View>
         );
     }
