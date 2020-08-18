@@ -51,10 +51,10 @@ class Deck extends Component {
                 }
 
                 if (vxy > 0){
-                    if (Math.abs(vertical ? dy : dx) > this.SWIPE_THRESHOLD) {
-                        Animated.decay(this.state.swing, {
-                            velocity: { x: 0, y: velocity },
-                            deceleration: 0.99,
+                    if (Math.abs(dy) > this.SWIPE_THRESHOLD) {
+                        Animated.spring(this.state.swing, {
+                            toValue: { x: 0, y: 0 },
+                            friction: 5,
                             useNativeDriver: true,
                         }).start(() => {
                             this.setState(
@@ -68,14 +68,9 @@ class Deck extends Component {
                                 },
                             );
                         });
-                        // if (velocity > 0) {
-                        //     this.handlePositiveDecay();
-                        // } else {
-                        //     this.handleNegativeDecay();
-                        // }
                     } else {
                         Animated.spring(this.state.swing, {
-                            toValue: { x: 0, y: 0 },
+                            toValue: { x: 0, y: -height },
                             friction: 4,
                             useNativeDriver: true,
                         }).start();
