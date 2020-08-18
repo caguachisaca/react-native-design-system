@@ -3,7 +3,7 @@ import { StyleSheet, View, Animated, PanResponder, Text, Platform, Dimensions } 
 import { FullScreenLoader } from '../FullScreenLoader';
 import PropTypes from 'prop-types';
 import clamp from 'clamp';
-const { width, height } = Dimensions.get('window');
+const { width, height } = Dimensions.get('screen');
 
 class Deck extends Component {
     constructor(props) {
@@ -49,12 +49,14 @@ class Deck extends Component {
                 } else if (vxy < 0) {
                     velocity = clamp(Math.abs(vxy), minClamp, maxClamp) * -1;
                 }
-
                 if (vxy > 0){
+                    if (this.state.swiped.length === 0){
+                        return;
+                    }
                     if (Math.abs(dy) > this.SWIPE_THRESHOLD) {
                         Animated.spring(this.state.swing, {
                             toValue: { x: 0, y: 0 },
-                            friction: 5,
+                            speed: 20,
                             useNativeDriver: true,
                         }).start(() => {
                             this.setState(
